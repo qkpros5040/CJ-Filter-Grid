@@ -1,0 +1,16 @@
+{
+  "name": "dynamic-post-grid-pro",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dynamic Post Grid Pro WordPress plugin (React + WPGraphQL).",
+  "scripts": {
+    "build": "wp-scripts build --webpack-copy-php --output-path=build",
+    "start": "wp-scripts start --webpack-copy-php --output-path=build",
+    "lint:js": "wp-scripts lint-js",
+    "format:js": "wp-scripts format-js"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^30.11.0"
+  }
+}
+

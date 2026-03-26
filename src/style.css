@@ -1,0 +1,115 @@
+.dpg {
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	padding: 16px;
+	background: #fff;
+}
+.dpg-toolbar {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 12px;
+}
+.dpg-search {
+	width: min(420px, 100%);
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+}
+.dpg-meta {
+	color: #6b7280;
+	font-size: 13px;
+}
+.dpg-filters {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin: 12px 0;
+}
+@media (max-width: 700px) {
+	.dpg-filters {
+		grid-template-columns: 1fr;
+	}
+}
+.dpg-filter {
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	padding: 10px 12px;
+}
+.dpg-filter__title {
+	font-weight: 600;
+	margin-bottom: 6px;
+	text-transform: capitalize;
+}
+.dpg-filter__terms {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px 10px;
+}
+.dpg-term {
+	display: inline-flex;
+	gap: 8px;
+	align-items: center;
+	font-size: 13px;
+	color: #111827;
+}
+.dpg-error {
+	background: #fef2f2;
+	color: #991b1b;
+	border: 1px solid #fecaca;
+	padding: 10px 12px;
+	border-radius: 8px;
+	margin: 10px 0;
+	white-space: pre-wrap;
+}
+.dpg-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+@media (max-width: 900px) {
+	.dpg-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@media (max-width: 600px) {
+	.dpg-grid {
+		grid-template-columns: 1fr;
+	}
+}
+.dpg-item {
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	padding: 12px;
+}
+.dpg-item__title {
+	font-size: 16px;
+	line-height: 1.3;
+	margin: 0;
+}
+.dpg-item__title a {
+	text-decoration: none;
+}
+.dpg-pagination {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	justify-content: center;
+	margin-top: 14px;
+}
+.dpg-pagination button {
+	border: 1px solid #d1d5db;
+	background: #fff;
+	border-radius: 8px;
+	padding: 8px 10px;
+	cursor: pointer;
+}
+.dpg-pagination button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.dpg-pagination__meta {
+	color: #6b7280;
+	font-size: 13px;
+}

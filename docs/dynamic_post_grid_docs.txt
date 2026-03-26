@@ -1,0 +1,59 @@
+
+WordPress Plugin – Full Technical Documentation
+
+Plugin Name: Dynamic Post Grid Pro (DPG)
+
+1. Product Overview
+Dynamic Post Grid Pro is a universal WordPress plugin that dynamically scans post types and taxonomies to generate a modern grid system with search, filters, and pagination.
+Frontend: React
+Data Layer: GraphQL (WPGraphQL)
+
+2. Functional Requirements
+- Auto-detect post types
+- Auto-detect taxonomies
+- Configurable taxonomy filters (1 = show, 0 = hide)
+- GraphQL-powered filtering
+- Live search (debounced)
+
+3. System Architecture
+User → React UI → GraphQL → WPGraphQL → WP_Query → Database → Response → UI
+
+4. Technical Architecture
+Backend:
+- DPG_Plugin
+- DPG_Admin
+- DPG_GraphQL
+- DPG_Query_Builder
+
+5. GraphQL Schema
+Query: dpgPosts(postTypes, search, filters, page)
+Returns: nodes, total, pages
+
+6. Frontend (React)
+Components:
+- GridContainer
+- SearchBar
+- FiltersPanel
+- Pagination
+- GridItem
+
+7. Admin Panel
+Settings → Dynamic Grid
+- Select post types
+- Taxonomy config
+- Posts per page
+
+8. Performance
+- Debounced search
+- Optimized queries
+- Lazy loading
+
+9. Security
+- Sanitization
+- Capability checks
+
+10. Delivery
+- Plugin ZIP
+- React build
+- GraphQL schema
+
