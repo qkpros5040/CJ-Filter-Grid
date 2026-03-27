@@ -1,0 +1,20 @@
+.dpg-select2-poly {
+	display: grid;
+	gap: 6px;
+	max-width: 360px;
+}
+
+.dpg-select2-poly__search {
+	width: 100%;
+	max-width: 360px;
+	padding: 6px 10px;
+	border-radius: 6px;
+	border: 1px solid #dcdcde;
+}
+
+.dpg-select2-poly select[multiple] {
+	width: 100%;
+	max-width: 360px;
+	min-height: 120px;
+}
+

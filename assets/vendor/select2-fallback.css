@@ -1,0 +1,22 @@
+/* Minimal Select2 fallback styles (covers cases where the host loads selectWoo/select2 JS without CSS). */
+.select2-hidden-accessible {
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	padding: 0 !important;
+	margin: -1px !important;
+	overflow: hidden !important;
+	clip: rect(0, 0, 0, 0) !important;
+	white-space: nowrap !important;
+	border: 0 !important;
+}
+
+.select2-container {
+	display: inline-block;
+	vertical-align: middle;
+}
+
+.select2-dropdown {
+	z-index: 999999 !important;
+}
+

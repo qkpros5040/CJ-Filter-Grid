@@ -13,13 +13,20 @@ Helper (optional):
 ## Usage
 - Add the shortcode: `[dpg_grid]`
 - Optional overrides:
-	- `[dpg_grid post_types="post,page" posts_per_page="12"]`
+	- Different grid per post type:
+		- `[dpg_grid post_type="post" taxonomies="category,post_tag" posts_per_page="12"]`
+		- `[dpg_grid post_type="page" taxonomies="" posts_per_page="20"]`
+	- Multiple post types in one grid:
+		- `[dpg_grid post_types="post,page" taxonomies="category" posts_per_page="12"]`
+	- Use a saved preset from Settings:
+		- `[dpg_grid grid="products"]`
 
 ## Admin settings
 WP Admin → **Settings → Dynamic Grid**
 - Post types (which types to query)
-- Taxonomy filter visibility (future UI wiring; stored as config)
+- Taxonomy filter visibility (default fallback if shortcode `taxonomies` is not provided)
 - Posts per page
+- Grid Presets: choose taxonomies and optionally restrict which terms appear per taxonomy
 
 ## Development (frontend)
 Source lives in `src/` and compiled assets live in `build/` (these are what WordPress enqueues).
