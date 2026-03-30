@@ -251,6 +251,77 @@
 			update();
 		}
 
+		function bindAdPicker(root) {
+			const pickBtn = root.querySelector('.dpg-ad-pick');
+			const removeBtn = root.querySelector('.dpg-ad-remove');
+			const idInput = root.querySelector('input.dpg-ad-image-id');
+			const linkInput = root.querySelector('input.dpg-ad-link');
+			const previewWrap = root.querySelector('.dpg-ad-preview');
+			if (!pickBtn || !removeBtn || !idInput || !previewWrap) return;
+
+			function setPreview(url) {
+				const existingImg = previewWrap.querySelector('img');
+				if (url) {
+					if (existingImg) existingImg.src = url;
+					else {
+						const img = document.createElement('img');
+						img.src = url;
+						img.alt = '';
+						img.style.width = '80px';
+						img.style.height = 'auto';
+						img.style.borderRadius = '8px';
+						img.style.border = '1px solid #e5e7eb';
+						previewWrap.insertBefore(img, previewWrap.firstChild);
+						const ph = previewWrap.querySelector('div');
+						if (ph) ph.remove();
+					}
+				} else {
+					if (existingImg) existingImg.remove();
+					if (!previewWrap.querySelector('div')) {
+						const ph = document.createElement('div');
+						ph.style.width = '80px';
+						ph.style.height = '60px';
+						ph.style.borderRadius = '8px';
+						ph.style.border = '1px dashed #d1d5db';
+						ph.style.background = '#fafafa';
+						previewWrap.insertBefore(ph, previewWrap.firstChild);
+					}
+				}
+			}
+
+			pickBtn.addEventListener('click', () => {
+				if (!window.wp || !window.wp.media) return;
+				const frame = window.wp.media({
+					title: 'Select ad image',
+					multiple: false,
+					library: { type: 'image' },
+					button: { text: 'Use this image' },
+				});
+				frame.on('select', () => {
+					const attachment = frame.state().get('selection').first();
+					if (!attachment) return;
+					const data = attachment.toJSON ? attachment.toJSON() : null;
+					if (!data || !data.id) return;
+					idInput.value = String(data.id);
+					const url =
+						(data.sizes && data.sizes.medium && data.sizes.medium.url) ||
+						(data.sizes && data.sizes.thumbnail && data.sizes.thumbnail.url) ||
+						data.url ||
+						'';
+					setPreview(url);
+					removeBtn.disabled = false;
+				});
+				frame.open();
+			});
+
+			removeBtn.addEventListener('click', () => {
+				idInput.value = '';
+				setPreview('');
+				removeBtn.disabled = true;
+				if (linkInput) linkInput.value = linkInput.value || '';
+			});
+		}
+
 		addBtn.addEventListener('click', () => {
 			const tbody = table.querySelector('tbody');
 			const first = tbody && tbody.querySelector('tr.dpg-grid-row');
@@ -278,6 +349,7 @@
 			bindRemove(clone);
 			bindTaxonomyChange(clone);
 			bindKeyPreview(clone);
+			bindAdPicker(clone);
 			clone.querySelectorAll('select.dpg-ms').forEach((sel) => {
 				const mount = sel.parentElement && sel.parentElement.querySelector('.dpg-ms-ui');
 				if (mount) renderMultiSelect(sel, mount);
@@ -288,6 +360,7 @@
 		table.querySelectorAll('tr.dpg-grid-row').forEach((row) => {
 			bindTaxonomyChange(row);
 			bindKeyPreview(row);
+			bindAdPicker(row);
 		});
 
 		table.querySelectorAll('select.dpg-ms').forEach((sel) => {

@@ -38,6 +38,10 @@ final class DPG_Admin {
 			return;
 		}
 
+		if ( function_exists( 'wp_enqueue_media' ) ) {
+			wp_enqueue_media();
+		}
+
 		wp_enqueue_style(
 			'dpg-admin',
 			DPG_URL . 'assets/admin.css',
@@ -58,7 +62,12 @@ final class DPG_Admin {
 			return;
 		}
 
-		if ( ! isset( $_POST['dpg_action'] ) || 'save' !== sanitize_key( (string) wp_unslash( $_POST['dpg_action'] ) ) ) {
+		if ( ! isset( $_POST['dpg_action'] ) ) {
+			return;
+		}
+
+		$action = sanitize_key( (string) wp_unslash( $_POST['dpg_action'] ) );
+		if ( ! in_array( $action, array( 'save', 'seed_terms' ), true ) ) {
 			return;
 		}
 
@@ -68,6 +77,12 @@ final class DPG_Admin {
 
 		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dpg_settings_nonce'] ) ), 'dpg_save_settings' ) ) {
 			return;
+		}
+
+		if ( 'seed_terms' === $action ) {
+			DPG_Plugin::seed_article_taxonomy_terms( false, true );
+			wp_safe_redirect( add_query_arg( array( 'page' => 'dpg-settings', 'seeded' => '1' ), admin_url( 'options-general.php' ) ) );
+			exit;
 		}
 
 		$post_types = array();
@@ -173,8 +188,18 @@ final class DPG_Admin {
 					}
 				}
 
+				$row_filter_mode = isset( $row['filter_mode'] ) ? sanitize_key( (string) $row['filter_mode'] ) : 'ajax';
+				if ( ! in_array( $row_filter_mode, array( 'ajax', 'links' ), true ) ) {
+					$row_filter_mode = 'ajax';
+				}
+
+				$row_archive_sync = 1;
+				if ( isset( $row['archive_sync'] ) ) {
+					$row_archive_sync = (int) (bool) $row['archive_sync'];
+				}
+
 				$row_layout = isset( $row['layout'] ) ? sanitize_key( (string) $row['layout'] ) : 'card';
-				if ( ! in_array( $row_layout, array( 'card', 'logo', 'overlay' ), true ) ) {
+				if ( ! in_array( $row_layout, array( 'card', 'logo', 'overlay', 'blog', 'categories' ), true ) ) {
 					$row_layout = 'card';
 				}
 
@@ -183,15 +208,42 @@ final class DPG_Admin {
 					$row_pagination = 'buttons';
 				}
 
+				$row_ad_shortcode = '';
+				if ( isset( $row['ad_shortcode'] ) ) {
+					$row_ad_shortcode = sanitize_text_field( (string) $row['ad_shortcode'] );
+				}
+
+				$row_ad_image_id = 0;
+				if ( isset( $row['ad_image_id'] ) ) {
+					$row_ad_image_id = (int) $row['ad_image_id'];
+				}
+				$row_ad_link = '';
+				if ( isset( $row['ad_link'] ) ) {
+					$row_ad_link = esc_url_raw( (string) $row['ad_link'] );
+				}
+				$row_ad_sticky_offset = 18;
+				if ( isset( $row['ad_sticky_offset'] ) ) {
+					$row_ad_sticky_offset = (int) $row['ad_sticky_offset'];
+				}
+				if ( $row_ad_sticky_offset < 0 ) {
+					$row_ad_sticky_offset = 0;
+				}
+
 				$grids[ $key ] = array(
 					'label'          => $label,
 					'post_types'     => $row_post_types,
 					'taxonomies'     => $row_taxonomies,
 					'term_ids'       => $row_term_ids,
 					'taxonomy_titles'=> $row_taxonomy_titles,
+					'filter_mode'    => $row_filter_mode,
+					'archive_sync'   => $row_archive_sync,
 					'posts_per_page' => $row_ppp,
 					'layout'         => $row_layout,
 					'pagination'     => $row_pagination,
+					'ad_shortcode'   => $row_ad_shortcode,
+					'ad_image_id'    => $row_ad_image_id,
+					'ad_link'        => $row_ad_link,
+					'ad_sticky_offset' => $row_ad_sticky_offset,
 				);
 			}
 		}
@@ -235,6 +287,9 @@ final class DPG_Admin {
 
 			<?php if ( isset( $_GET['updated'] ) ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( 'Settings saved.' ); ?></p></div>
+			<?php endif; ?>
+			<?php if ( isset( $_GET['seeded'] ) ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( 'Default taxonomy terms seeded.' ); ?></p></div>
 			<?php endif; ?>
 
 			<form method="post">
@@ -294,7 +349,11 @@ final class DPG_Admin {
 
 						<div class="dpg-actions">
 							<button type="submit" class="button button-primary"><?php echo esc_html( 'Save Settings' ); ?></button>
+							<button type="submit" class="button" name="dpg_action" value="seed_terms"><?php echo esc_html( 'Seed default taxonomy terms' ); ?></button>
 						</div>
+						<p class="dpg-help" style="margin-top:10px;">
+							<?php echo esc_html( 'Adds the default terms for the built-in Article taxonomies (won’t create duplicates).' ); ?>
+						</p>
 					</div>
 
 					<div class="dpg-card">
@@ -334,9 +393,16 @@ final class DPG_Admin {
 							$grid_taxonomies = (array) ( $grid['taxonomies'] ?? array() );
 							$grid_term_ids   = (array) ( $grid['term_ids'] ?? array() );
 							$grid_tax_titles = (array) ( $grid['taxonomy_titles'] ?? array() );
+							$grid_filter_mode = (string) ( $grid['filter_mode'] ?? 'ajax' );
+							$grid_archive_sync = (int) ( $grid['archive_sync'] ?? 1 );
 							$grid_ppp        = (int) ( $grid['posts_per_page'] ?? 9 );
 							$grid_layout     = (string) ( $grid['layout'] ?? 'card' );
 							$grid_pagination = (string) ( $grid['pagination'] ?? 'buttons' );
+							$grid_ad_shortcode = (string) ( $grid['ad_shortcode'] ?? '' );
+							$grid_ad_image_id = (int) ( $grid['ad_image_id'] ?? 0 );
+							$grid_ad_link = (string) ( $grid['ad_link'] ?? '' );
+							$grid_ad_sticky_offset = (int) ( $grid['ad_sticky_offset'] ?? 18 );
+							$grid_ad_image_url = $grid_ad_image_id ? (string) wp_get_attachment_image_url( $grid_ad_image_id, 'medium' ) : '';
 							$shortcode_key   = $key ? (string) $key : 'your_key';
 							?>
 							<tr class="dpg-grid-row" data-grid-index="<?php echo esc_attr( (string) $i ); ?>">
@@ -365,6 +431,22 @@ final class DPG_Admin {
 										<?php endforeach; ?>
 									</select>
 									<div class="dpg-ms-ui" data-for="taxonomies"></div>
+									<p style="margin:10px 0 0;">
+										<label style="display:flex; gap:8px; align-items:center; margin:0;">
+											<span style="color:#646970; font-size:12px;"><?php echo esc_html( 'Filter mode' ); ?></span>
+											<select name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][filter_mode]" style="max-width: 190px;">
+												<option value="ajax" <?php selected( 'ajax' === $grid_filter_mode ); ?>><?php echo esc_html( 'AJAX (checkboxes)' ); ?></option>
+												<option value="links" <?php selected( 'links' === $grid_filter_mode ); ?>><?php echo esc_html( 'Links (term pages)' ); ?></option>
+											</select>
+										</label>
+									</p>
+									<p style="margin:8px 0 0;">
+										<label style="display:flex; gap:8px; align-items:center; margin:0;">
+											<input type="hidden" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][archive_sync]" value="0" />
+											<input type="checkbox" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][archive_sync]" value="1" <?php checked( 1 === (int) $grid_archive_sync ); ?> />
+											<span style="color:#646970; font-size:12px;"><?php echo esc_html( 'Auto-select current term on term pages' ); ?></span>
+										</label>
+									</p>
 									<details class="dpg-tax-details">
 										<summary><?php echo esc_html( 'Configure terms & titles' ); ?></summary>
 										<div class="dpg-tax-terms">
@@ -407,7 +489,35 @@ final class DPG_Admin {
 										<option value="card" <?php selected( 'card' === $grid_layout ); ?>><?php echo esc_html( 'Card' ); ?></option>
 										<option value="logo" <?php selected( 'logo' === $grid_layout ); ?>><?php echo esc_html( 'Logo' ); ?></option>
 										<option value="overlay" <?php selected( 'overlay' === $grid_layout ); ?>><?php echo esc_html( 'Overlay' ); ?></option>
+										<option value="blog" <?php selected( 'blog' === $grid_layout ); ?>><?php echo esc_html( 'Blog' ); ?></option>
+										<option value="categories" <?php selected( 'categories' === $grid_layout ); ?>><?php echo esc_html( 'Categories' ); ?></option>
 									</select>
+									<div style="margin-top:8px;">
+										<div style="display:grid; gap:8px;">
+											<span style="color:#646970; font-size:12px;"><?php echo esc_html( 'Sidebar ad (Blog/Categories layout)' ); ?></span>
+											<input type="hidden" class="dpg-ad-image-id" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][ad_image_id]" value="<?php echo esc_attr( (string) $grid_ad_image_id ); ?>" />
+											<div class="dpg-ad-preview" style="display:flex; gap:10px; align-items:center;">
+												<?php if ( $grid_ad_image_url ) : ?>
+													<img src="<?php echo esc_url( $grid_ad_image_url ); ?>" alt="" style="width:80px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />
+												<?php else : ?>
+													<div style="width:80px; height:60px; border-radius:8px; border:1px dashed #d1d5db; background:#fafafa;"></div>
+												<?php endif; ?>
+												<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+													<button type="button" class="button dpg-ad-pick"><?php echo esc_html( 'Choose image' ); ?></button>
+													<button type="button" class="button dpg-ad-remove" <?php disabled( ! $grid_ad_image_id ); ?>><?php echo esc_html( 'Remove' ); ?></button>
+												</div>
+											</div>
+											<label style="display:grid; gap:6px; margin:0;">
+												<span style="color:#646970; font-size:12px;"><?php echo esc_html( 'Ad link (optional)' ); ?></span>
+												<input type="url" class="dpg-ad-link" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][ad_link]" value="<?php echo esc_attr( $grid_ad_link ); ?>" placeholder="https://…" />
+											</label>
+											<label style="display:grid; gap:6px; margin:0;">
+												<span style="color:#646970; font-size:12px;"><?php echo esc_html( 'Sticky offset (px)' ); ?></span>
+												<input type="number" min="0" step="1" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][ad_sticky_offset]" value="<?php echo esc_attr( (string) $grid_ad_sticky_offset ); ?>" style="max-width: 140px;" />
+											</label>
+											<input type="hidden" name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][ad_shortcode]" value="<?php echo esc_attr( $grid_ad_shortcode ); ?>" />
+										</div>
+									</div>
 								</td>
 								<td>
 									<select name="dpg_grids[<?php echo esc_attr( (string) $i ); ?>][pagination]" style="min-width: 140px;">

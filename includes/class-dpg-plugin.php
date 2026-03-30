@@ -18,6 +18,12 @@ final class DPG_Plugin {
 	}
 
 	public static function activate(): void {
+		// Ensure taxonomies exist before flushing rewrite rules.
+		if ( class_exists( __CLASS__ ) ) {
+			self::register_article_taxonomies_static();
+			self::seed_article_taxonomy_terms( true, true );
+		}
+
 		$defaults = array(
 			'post_types'      => array( 'post' ),
 			'taxonomy_config' => array(),
@@ -30,10 +36,14 @@ final class DPG_Plugin {
 			$existing = (array) get_option( 'dpg_settings', array() );
 			update_option( 'dpg_settings', array_merge( $defaults, $existing ) );
 		}
+
+		flush_rewrite_rules();
 	}
 
 	public function init(): void {
 		load_plugin_textdomain( 'dynamic-post-grid-pro', false, dirname( plugin_basename( DPG_FILE ) ) . '/languages' );
+
+		add_action( 'init', array( $this, 'register_article_taxonomies' ), 5 );
 
 		DPG_Admin::instance()->init();
 		DPG_GraphQL::instance()->init();
@@ -44,6 +54,213 @@ final class DPG_Plugin {
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 		add_action( 'admin_notices', array( $this, 'maybe_show_graphql_notice' ) );
 		add_shortcode( 'dpg_grid', array( $this, 'render_shortcode' ) );
+	}
+
+	/**
+	 * Register site taxonomies used for filtering "Articles" (posts).
+	 * These are hierarchical taxonomies (archives like categories, not tags).
+	 */
+	public function register_article_taxonomies(): void {
+		self::register_article_taxonomies_static();
+	}
+
+	private static function register_article_taxonomies_static(): void {
+		$taxonomies = array(
+			'actualites_litteraires'       => array(
+				'label' => 'Actualités littéraires',
+				'slug'  => 'actualites-litteraires',
+				'gql1'  => 'CjActualitesLitterairesCategory',
+				'gqlN'  => 'CjActualitesLitterairesCategories',
+			),
+			'livres_selections_jeunesse'   => array(
+				'label' => 'Livres et sélections jeunesse',
+				'slug'  => 'livres-selections-jeunesse',
+				'gql1'  => 'CjLivresSelectionsJeunesseCategory',
+				'gqlN'  => 'CjLivresSelectionsJeunesseCategories',
+			),
+			'mediation_lecture'            => array(
+				'label' => 'Médiation de la lecture',
+				'slug'  => 'mediation-de-la-lecture',
+				'gql1'  => 'CjMediationLectureCategory',
+				'gqlN'  => 'CjMediationLectureCategories',
+			),
+			'entrevues_regards'            => array(
+				'label' => 'Entrevues et regards',
+				'slug'  => 'entrevues-et-regards',
+				'gql1'  => 'CjEntrevuesRegardsCategory',
+				'gqlN'  => 'CjEntrevuesRegardsCategories',
+			),
+			'par_age'                      => array(
+				'label' => 'Par âge',
+				'slug'  => 'par-age',
+				'gql1'  => 'CjParAgeCategory',
+				'gqlN'  => 'CjParAgeCategories',
+			),
+			'par_type_de_livre'            => array(
+				'label' => 'Par type de livre',
+				'slug'  => 'par-type-de-livre',
+				'gql1'  => 'CjParTypeLivreCategory',
+				'gqlN'  => 'CjParTypeLivreCategories',
+			),
+		);
+
+		foreach ( $taxonomies as $taxonomy => $data ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+			if ( ! $taxonomy ) {
+				continue;
+			}
+
+			$label = isset( $data['label'] ) ? (string) $data['label'] : $taxonomy;
+			$slug  = isset( $data['slug'] ) ? (string) $data['slug'] : $taxonomy;
+			$gql1  = isset( $data['gql1'] ) ? (string) $data['gql1'] : '';
+			$gqlN  = isset( $data['gqlN'] ) ? (string) $data['gqlN'] : '';
+
+			if ( taxonomy_exists( $taxonomy ) ) {
+				// Make sure it's attached to posts even if created elsewhere.
+				register_taxonomy_for_object_type( $taxonomy, 'post' );
+				continue;
+			}
+
+			$labels = array(
+				'name'              => $label,
+				'singular_name'     => $label,
+				'search_items'      => 'Rechercher',
+				'all_items'         => 'Tous',
+				'parent_item'       => 'Parent',
+				'parent_item_colon' => 'Parent :',
+				'edit_item'         => 'Modifier',
+				'update_item'       => 'Mettre à jour',
+				'add_new_item'      => 'Ajouter',
+				'new_item_name'     => 'Nouveau',
+				'menu_name'         => $label,
+			);
+
+			register_taxonomy(
+				$taxonomy,
+				array( 'post' ),
+				array(
+					'hierarchical'          => true,
+					'labels'                => $labels,
+					'public'                => true,
+					'show_ui'               => true,
+					'show_admin_column'     => true,
+					'show_in_nav_menus'     => true,
+					'show_tagcloud'         => false,
+					'show_in_rest'          => true,
+					'rewrite'               => array(
+						'slug'         => sanitize_title( $slug ),
+						'with_front'   => false,
+						'hierarchical' => true,
+					),
+					'query_var'             => true,
+					'show_in_graphql'       => true,
+					'graphql_single_name'   => $gql1 ? $gql1 : 'Cj' . preg_replace( '/[^A-Za-z0-9]/', '', ucwords( str_replace( '_', ' ', $taxonomy ) ) ) . 'Category',
+					'graphql_plural_name'   => $gqlN ? $gqlN : 'Cj' . preg_replace( '/[^A-Za-z0-9]/', '', ucwords( str_replace( '_', ' ', $taxonomy ) ) ) . 'Categories',
+				)
+			);
+		}
+	}
+
+	/**
+	 * Seed default terms for the article taxonomies.
+	 *
+	 * @param bool $only_if_empty When true, seeds only if a taxonomy has no terms yet.
+	 * @param bool $mark_seeded   When true, sets the dpg_seeded_article_taxonomies option.
+	 */
+	public static function seed_article_taxonomy_terms( bool $only_if_empty = true, bool $mark_seeded = true ): void {
+		if ( $only_if_empty && get_option( 'dpg_seeded_article_taxonomies', false ) ) {
+			return;
+		}
+
+		$seed = array(
+			'actualites_litteraires'     => array(
+				'Actualités littéraires',
+				'Prix littéraires',
+				'Salons du livre',
+				'Événements littéraires',
+				'Nouvelles de l’organisme',
+				'Nouvelles des membres',
+			),
+			'livres_selections_jeunesse' => array(
+				'Livres et sélections jeunesse',
+				'Sélections CJ',
+				'Incontournables',
+				'Top 5 des libraires',
+				'Lectures de l’équipe CJ',
+				'Sélections thématiques',
+				'Réseaux littéraires',
+			),
+			'mediation_lecture'          => array(
+				'Médiation de la lecture',
+				'Activités',
+				'Astuces de profs',
+				'Pratiques inspirantes',
+			),
+			'entrevues_regards'          => array(
+				'Entrevues et regards',
+				'Entrevues',
+				'Carte blanche (membres CJ)',
+				'Rampe de lancement',
+				'Francophonie à travers le pays',
+			),
+			'par_age'                    => array(
+				'Par âge',
+				'0–5 ans',
+				'6–8 ans',
+				'9–11 ans',
+				'12–17 ans',
+			),
+			'par_type_de_livre'          => array(
+				'Par type de livre',
+				'Album',
+				'Roman',
+				'Bande dessinée',
+				'Documentaire',
+				'Poésie',
+			),
+		);
+
+		foreach ( $seed as $taxonomy => $terms ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+			if ( ! $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
+				continue;
+			}
+
+			if ( $only_if_empty ) {
+				$existing = get_terms(
+					array(
+						'taxonomy'   => $taxonomy,
+						'hide_empty' => false,
+						'number'     => 1,
+						'fields'     => 'ids',
+					)
+				);
+				if ( ! is_wp_error( $existing ) && ! empty( $existing ) ) {
+					continue;
+				}
+			}
+
+			foreach ( (array) $terms as $term_name ) {
+				$term_name = (string) $term_name;
+				if ( '' === trim( $term_name ) ) {
+					continue;
+				}
+				if ( term_exists( $term_name, $taxonomy ) ) {
+					continue;
+				}
+				wp_insert_term(
+					$term_name,
+					$taxonomy,
+					array(
+						'slug' => sanitize_title( $term_name ),
+					)
+				);
+			}
+		}
+
+		if ( $mark_seeded ) {
+			update_option( 'dpg_seeded_article_taxonomies', 1, true );
+		}
 	}
 
 	public function maybe_disable_graphql_caching(): void {
@@ -169,7 +386,7 @@ final class DPG_Plugin {
 			}
 
 			$layout = isset( $grid['layout'] ) ? sanitize_key( (string) $grid['layout'] ) : 'card';
-			if ( ! in_array( $layout, array( 'card', 'logo', 'overlay' ), true ) ) {
+			if ( ! in_array( $layout, array( 'card', 'logo', 'overlay', 'blog', 'categories' ), true ) ) {
 				$layout = 'card';
 			}
 
@@ -201,6 +418,12 @@ final class DPG_Plugin {
 				'layout'         => $layout,
 				'taxonomy_titles'=> $taxonomy_titles,
 				'pagination'     => $pagination,
+				'filter_mode'    => ( isset( $grid['filter_mode'] ) && in_array( (string) $grid['filter_mode'], array( 'ajax', 'links' ), true ) ) ? (string) $grid['filter_mode'] : 'ajax',
+				'archive_sync'   => isset( $grid['archive_sync'] ) ? (int) (bool) $grid['archive_sync'] : 1,
+				'ad_shortcode'   => isset( $grid['ad_shortcode'] ) ? sanitize_text_field( (string) $grid['ad_shortcode'] ) : '',
+				'ad_image_id'    => isset( $grid['ad_image_id'] ) ? (int) $grid['ad_image_id'] : 0,
+				'ad_link'        => isset( $grid['ad_link'] ) ? esc_url_raw( (string) $grid['ad_link'] ) : '',
+				'ad_sticky_offset' => isset( $grid['ad_sticky_offset'] ) ? max( 0, (int) $grid['ad_sticky_offset'] ) : 18,
 			);
 		}
 
@@ -269,7 +492,14 @@ final class DPG_Plugin {
 				'post_types'     => implode( ',', $settings['post_types'] ),
 				'taxonomies'     => '',
 				'layout'         => '',
+				'group_by'       => '',
 				'pagination'     => '',
+				'filter_mode'    => '',
+				'archive_sync'   => '',
+				'ad_shortcode'   => '',
+				'ad_image_id'    => '',
+				'ad_link'        => '',
+				'ad_sticky_offset' => '',
 				'posts_per_page' => (string) $settings['posts_per_page'],
 			),
 			$raw_atts,
@@ -286,6 +516,12 @@ final class DPG_Plugin {
 		$layout     = $preset ? (string) ( $preset['layout'] ?? 'card' ) : 'card';
 		$tax_titles = $preset ? (array) ( $preset['taxonomy_titles'] ?? array() ) : array();
 		$pagination = $preset ? (string) ( $preset['pagination'] ?? 'buttons' ) : 'buttons';
+		$filter_mode = $preset ? (string) ( $preset['filter_mode'] ?? 'ajax' ) : 'ajax';
+		$archive_sync = $preset ? (int) ( $preset['archive_sync'] ?? 1 ) : 1;
+		$ad_shortcode = $preset ? (string) ( $preset['ad_shortcode'] ?? '' ) : '';
+		$ad_image_id  = $preset ? (int) ( $preset['ad_image_id'] ?? 0 ) : 0;
+		$ad_link      = $preset ? (string) ( $preset['ad_link'] ?? '' ) : '';
+		$ad_sticky_offset = $preset ? (int) ( $preset['ad_sticky_offset'] ?? 18 ) : 18;
 
 		// Explicit shortcode attrs override preset/defaults.
 		$post_type = sanitize_key( (string) $atts['post_type'] );
@@ -319,8 +555,16 @@ final class DPG_Plugin {
 
 		if ( array_key_exists( 'layout', $raw_atts ) ) {
 			$layout_override = sanitize_key( (string) $atts['layout'] );
-			if ( in_array( $layout_override, array( 'card', 'logo', 'overlay' ), true ) ) {
+			if ( in_array( $layout_override, array( 'card', 'logo', 'overlay', 'blog', 'categories' ), true ) ) {
 				$layout = $layout_override;
+			}
+		}
+
+		$group_by = '';
+		if ( array_key_exists( 'group_by', $raw_atts ) ) {
+			$group_by = sanitize_key( (string) $atts['group_by'] );
+			if ( $group_by && ! taxonomy_exists( $group_by ) ) {
+				$group_by = '';
 			}
 		}
 
@@ -331,6 +575,71 @@ final class DPG_Plugin {
 			}
 		}
 
+		if ( array_key_exists( 'filter_mode', $raw_atts ) ) {
+			$filter_mode_override = sanitize_key( (string) $atts['filter_mode'] );
+			if ( in_array( $filter_mode_override, array( 'ajax', 'links' ), true ) ) {
+				$filter_mode = $filter_mode_override;
+			}
+		}
+
+		if ( array_key_exists( 'archive_sync', $raw_atts ) ) {
+			$archive_sync = (int) (bool) (int) $atts['archive_sync'];
+		}
+
+		if ( array_key_exists( 'ad_shortcode', $raw_atts ) ) {
+			$ad_shortcode = sanitize_text_field( (string) $atts['ad_shortcode'] );
+		}
+		if ( array_key_exists( 'ad_image_id', $raw_atts ) ) {
+			$ad_image_id = (int) $atts['ad_image_id'];
+		}
+		if ( array_key_exists( 'ad_link', $raw_atts ) ) {
+			$ad_link = esc_url_raw( (string) $raw_atts['ad_link'] );
+		}
+		if ( array_key_exists( 'ad_sticky_offset', $raw_atts ) ) {
+			$ad_sticky_offset = max( 0, (int) $atts['ad_sticky_offset'] );
+		}
+
+		$context_term = null;
+		if ( $archive_sync ) {
+			$qo = function_exists( 'get_queried_object' ) ? get_queried_object() : null;
+			if ( $qo instanceof WP_Term ) {
+				$tax = (string) $qo->taxonomy;
+				if ( $tax && in_array( $tax, $taxonomies, true ) ) {
+					$context_term = array(
+						'taxonomy' => $tax,
+						'termId'   => (int) $qo->term_id,
+					);
+				}
+			}
+		}
+
+		$archive_url = '';
+		if ( ! empty( $post_types ) ) {
+			$primary = (string) $post_types[0];
+			if ( 'post' === $primary ) {
+				$page_for_posts = (int) get_option( 'page_for_posts' );
+				$archive_url    = $page_for_posts ? (string) get_permalink( $page_for_posts ) : (string) home_url( '/' );
+			} else {
+				$link = get_post_type_archive_link( $primary );
+				$archive_url = $link ? (string) $link : (string) home_url( '/' );
+			}
+		}
+
+		if ( isset( $raw_atts['archive_url'] ) ) {
+			$archive_url = esc_url_raw( (string) $raw_atts['archive_url'] );
+		}
+
+		$ad_html = '';
+		$ad_image_url = '';
+		if ( $ad_image_id ) {
+			$ad_image_url = (string) wp_get_attachment_image_url( $ad_image_id, 'large' );
+		}
+		$ad_link = $ad_link ? $ad_link : '';
+		if ( ! $ad_image_url && $ad_shortcode ) {
+			// Back-compat: still allow shortcode-based ads if no image is configured.
+			$ad_html = (string) do_shortcode( $ad_shortcode );
+		}
+
 		$data = array(
 			'postTypes'     => $post_types,
 			'postsPerPage'  => $ppp,
@@ -338,12 +647,26 @@ final class DPG_Plugin {
 			'termIds'       => $term_ids,
 			'grid'          => $grid_key,
 			'layout'        => $layout,
+			'groupByTaxonomy' => $group_by,
 			'taxonomyTitles'=> $tax_titles,
 			'pagination'    => $pagination,
+			'filterMode'    => $filter_mode,
+			'contextTerm'   => $context_term,
+			'archiveUrl'    => $archive_url,
+			'adHtml'        => $ad_html,
+			'adImageUrl'    => $ad_image_url,
+			'adLink'        => $ad_link,
+			'adStickyOffset'=> $ad_sticky_offset,
 		);
 
+		$style_attr = '';
+		if ( $ad_sticky_offset >= 0 ) {
+			$style_attr = sprintf( ' style="%s"', esc_attr( '--dpg-sticky-top:' . (string) (int) $ad_sticky_offset . 'px;' ) );
+		}
+
 		return sprintf(
-			'<div class="dpg-root" data-dpg="%s"></div>',
+			'<div class="dpg-root"%s data-dpg="%s"></div>',
+			$style_attr,
 			esc_attr( wp_json_encode( $data ) )
 		);
 	}

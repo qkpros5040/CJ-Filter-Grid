@@ -4,8 +4,12 @@ import './style.css';
 	if (!window.wp || !window.wp.element) return;
 
 	const el = window.wp.element;
-	const { createElement, useEffect, useMemo, useState } = el;
+	const { createElement, useEffect, useMemo, useRef, useState } = el;
 	const __ = window.wp.i18n && window.wp.i18n.__ ? window.wp.i18n.__ : (s) => s;
+
+	function normalize(text) {
+		return String(text || '').toLowerCase().trim();
+	}
 
 	function useDebounced(value, delayMs) {
 		const [debounced, setDebounced] = useState(value);
@@ -33,11 +37,61 @@ import './style.css';
 			});
 	}
 
-	function FiltersPanel({ enabledTaxonomies, selected, termsByTax, onToggleTerm, taxonomyTitles }) {
+	function Chevron() {
+		return createElement(
+			'svg',
+			{ className: 'dpg-chevron', width: 14, height: 14, viewBox: '0 0 20 20', 'aria-hidden': true },
+			createElement('path', { d: 'M5.5 7.5 10 12l4.5-4.5', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' })
+		);
+	}
+
+	function SearchIcon() {
+		return createElement(
+			'svg',
+			{ className: 'dpg-searchicon', width: 18, height: 18, viewBox: '0 0 24 24', 'aria-hidden': true },
+			createElement('path', { d: 'M21 21l-4.35-4.35m1.6-5.05a7.45 7.45 0 11-14.9 0 7.45 7.45 0 0114.9 0z', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' })
+		);
+	}
+
+	function ResetButton({ href, onClick, mode }) {
+		const label = __('Réinitialiser', 'dynamic-post-grid-pro');
+		if (mode === 'ajax') {
+			return createElement(
+				'button',
+				{ type: 'button', className: 'dpg-reset', onClick, title: __('Reset', 'dynamic-post-grid-pro') },
+				label
+			);
+		}
+		if (!href) return null;
+		return createElement('a', { className: 'dpg-reset', href, title: __('Reset', 'dynamic-post-grid-pro') }, label);
+	}
+
+	function FiltersPanel({ enabledTaxonomies, selected, termsByTax, onToggleTerm, taxonomyTitles, mode, contextTerm }) {
 		if (!enabledTaxonomies.length) return null;
+		const ref = useRef(null);
+		const [openTax, setOpenTax] = useState(null);
+		const [qByTax, setQByTax] = useState({});
+
+		useEffect(() => {
+			if (!openTax) return;
+			function onDocClick(e) {
+				if (!ref.current) return;
+				if (!ref.current.contains(e.target)) setOpenTax(null);
+			}
+			function onKeyDown(e) {
+				if (e.key === 'Escape') setOpenTax(null);
+			}
+			document.addEventListener('click', onDocClick);
+			document.addEventListener('keydown', onKeyDown);
+			return () => {
+				document.removeEventListener('click', onDocClick);
+				document.removeEventListener('keydown', onKeyDown);
+			};
+		}, [openTax]);
+
 		return createElement(
 			'div',
-			{ className: 'dpg-filters' },
+			{ className: 'dpg-filterbar', ref },
 			enabledTaxonomies.map((tax) => {
 				const terms = termsByTax[tax] || [];
 				if (!terms.length) return null;
@@ -45,26 +99,71 @@ import './style.css';
 					(taxonomyTitles && taxonomyTitles[tax]) ||
 					(termsByTax._labels && termsByTax._labels[tax]) ||
 					tax;
+				const open = openTax === tax;
+				const selectedIds = (selected && selected[tax]) || [];
+				const q = qByTax[tax] || '';
+				const qn = normalize(q);
+				const filtered = q ? terms.filter((t) => normalize(t.name).includes(qn)) : terms;
+				const activeTermId =
+					contextTerm && contextTerm.taxonomy === tax && contextTerm.termId ? Number(contextTerm.termId) : null;
+
 				return createElement(
-					'fieldset',
-					{ key: tax, className: 'dpg-filter' },
-					createElement('legend', { className: 'dpg-filter__title' }, title),
+					'div',
+					{ key: tax, className: `dpg-dd ${open ? 'is-open' : ''}` },
+					createElement(
+						'button',
+						{
+							type: 'button',
+							className: 'dpg-dd__btn',
+							onClick: () => setOpenTax(open ? null : tax),
+							'aria-expanded': open ? 'true' : 'false',
+						},
+						createElement('span', { className: 'dpg-dd__label' }, title),
+						selectedIds.length ? createElement('span', { className: 'dpg-dd__count' }, String(selectedIds.length)) : null,
+						createElement(Chevron, null)
+					),
 					createElement(
 						'div',
-						{ className: 'dpg-filter__terms' },
-						terms.map((t) => {
-							const checked = !!(selected[tax] && selected[tax].includes(t.id));
-							return createElement(
-								'label',
-								{ key: t.id, className: 'dpg-term' },
-								createElement('input', {
-									type: 'checkbox',
-									checked,
-									onChange: () => onToggleTerm(tax, t.id),
-								}),
-								createElement('span', null, t.name)
-							);
-						})
+						{ className: 'dpg-dd__menu', hidden: !open },
+						createElement('input', {
+							className: 'dpg-dd__search',
+							type: 'search',
+							placeholder: __('Filter…', 'dynamic-post-grid-pro'),
+							value: q,
+							onChange: (e) => setQByTax((prev) => ({ ...prev, [tax]: e.target.value })),
+						}),
+						createElement(
+							'div',
+							{ className: 'dpg-dd__items' },
+							mode === 'links'
+								? filtered.map((t) =>
+										createElement(
+											'a',
+											{
+												key: t.id,
+												className: `dpg-dd__link ${
+													activeTermId && Number(t.id) === activeTermId ? 'is-active' : ''
+												}`,
+												href: t.uri || '#',
+												rel: 'nofollow',
+											},
+											t.name
+										)
+								  )
+								: filtered.map((t) => {
+										const checked = !!(selected[tax] && selected[tax].includes(t.id));
+										return createElement(
+											'label',
+											{ key: t.id, className: 'dpg-dd__item' },
+											createElement('input', {
+												type: 'checkbox',
+												checked,
+												onChange: () => onToggleTerm(tax, t.id),
+											}),
+											createElement('span', null, t.name)
+										);
+								  })
+						)
 					)
 				);
 			})
@@ -141,6 +240,129 @@ import './style.css';
 				createElement('div', { className: 'dpg-overlay__shade' }),
 				createElement('div', { className: 'dpg-overlay__title' }, title),
 				createElement('div', { className: 'dpg-overlay__cta', 'aria-hidden': 'true' }, '→')
+			)
+		);
+	}
+
+	function BlogCard({ node }) {
+		const title = node && node.title ? node.title : '(No title)';
+		const uri = node && node.uri ? node.uri : null;
+		const excerpt = node && node.excerpt ? node.excerpt : '';
+		const imgUrl = node && node.featuredImageUrl ? node.featuredImageUrl : '';
+		const imgAlt = node && node.featuredImageAlt ? node.featuredImageAlt : '';
+
+		return createElement(
+			'article',
+			{ className: 'dpg-bcard' },
+			imgUrl
+				? createElement('img', {
+						className: 'dpg-bcard__img',
+						src: imgUrl,
+						alt: imgAlt,
+						loading: 'lazy',
+				  })
+				: null,
+			createElement(
+				'div',
+				{ className: 'dpg-bcard__body' },
+				createElement(
+					'h3',
+					{ className: 'dpg-bcard__title' },
+					uri ? createElement('a', { href: uri }, title) : title
+				),
+				excerpt ? createElement('p', { className: 'dpg-bcard__excerpt' }, excerpt) : null
+			)
+		);
+	}
+
+	function AdSlot({ config }) {
+		return (config && config.adImageUrl)
+			? createElement(
+					'div',
+					{ className: 'dpg-ad' },
+					createElement(
+						'a',
+						{
+							className: 'dpg-ad__link',
+							href: (config && config.adLink) || '#',
+							target: '_blank',
+							rel: 'noopener noreferrer',
+						},
+						createElement('img', { className: 'dpg-ad__img', src: config.adImageUrl, alt: '' })
+					)
+			  )
+			: config && config.adHtml
+				? createElement('div', {
+						className: 'dpg-ad',
+						dangerouslySetInnerHTML: { __html: config.adHtml },
+				  })
+				: createElement('div', { className: 'dpg-ad dpg-ad--empty' }, __('Publicité', 'dynamic-post-grid-pro'));
+	}
+
+	function CategorySection({ section, config }) {
+		const term = section && section.term ? section.term : null;
+		const posts = section && section.posts ? section.posts : null;
+		const nodes = (posts && posts.nodes) || [];
+		if (!term) return null;
+
+		return createElement(
+			'section',
+			{ className: 'dpg-cat' },
+			createElement(
+				'header',
+				{ className: 'dpg-cat__header' },
+				createElement(
+					'h2',
+					{ className: 'dpg-cat__title' },
+					term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
+				)
+			),
+			createElement(
+				'div',
+				{ className: 'dpg-cat__top' },
+				createElement(
+					'div',
+					{ className: 'dpg-cat__top-left' },
+					nodes[0]
+						? createElement(GridItemOverlay, {
+								key: nodes[0].databaseId || nodes[0].uri,
+								node: nodes[0],
+						  })
+						: null
+				),
+				createElement(
+					'div',
+					{ className: 'dpg-cat__top-right' },
+					nodes[1]
+						? createElement(GridItemOverlay, {
+								key: nodes[1].databaseId || nodes[1].uri,
+								node: nodes[1],
+						  })
+						: null,
+					nodes[2]
+						? createElement(GridItemOverlay, {
+								key: nodes[2].databaseId || nodes[2].uri,
+								node: nodes[2],
+						  })
+						: null
+				)
+			),
+			createElement(
+				'div',
+				{ className: 'dpg-cat__body' },
+				createElement(
+					'div',
+					{ className: 'dpg-cat__main' },
+					createElement(
+						'div',
+						{ className: 'dpg-cat__list' },
+						nodes.slice(3).map((node) => {
+							const key = node.databaseId || node.uri;
+							return createElement(BlogCard, { key, node });
+						})
+					)
+				),
+				createElement('aside', { className: 'dpg-cat__ad' }, createElement(AdSlot, { config }))
 			)
 		);
 	}
@@ -231,22 +453,41 @@ import './style.css';
 
 	function GridContainer({ config }) {
 		const [search, setSearch] = useState('');
+		const [searchOpen, setSearchOpen] = useState(false);
 		const debouncedSearch = useDebounced(search, 350);
+		const searchRef = useRef(null);
+
+		useEffect(() => {
+			if (searchOpen && searchRef.current) {
+				searchRef.current.focus();
+			}
+		}, [searchOpen]);
 		const [page, setPage] = useState(1);
 		const [loading, setLoading] = useState(false);
 		const [error, setError] = useState('');
 		const [nodes, setNodes] = useState([]);
+		const [sections, setSections] = useState([]);
 		const [total, setTotal] = useState(0);
 		const [pages, setPages] = useState(0);
 
 		const layout = (config && config.layout) || 'card';
 		const paginationType = (config && config.pagination) || 'buttons';
 
+		const groupByTaxonomy = useMemo(() => {
+			const explicit = config && config.groupByTaxonomy ? String(config.groupByTaxonomy) : '';
+			if (explicit) return explicit;
+			const list = (config && config.taxonomies) || [];
+			if (Array.isArray(list) && list.includes('category')) return 'category';
+			return Array.isArray(list) && list[0] ? String(list[0]) : 'category';
+		}, [config && config.groupByTaxonomy, config && config.taxonomies]);
+
 		const enabledTaxonomies = useMemo(() => {
 			const fromConfig = (config && config.taxonomies) || [];
 			if (!Array.isArray(fromConfig)) return [];
-			return Array.from(new Set(fromConfig.filter(Boolean)));
-		}, [config && config.taxonomies]);
+			const base = fromConfig.filter(Boolean);
+			if (layout === 'categories' && groupByTaxonomy && !base.includes(groupByTaxonomy)) base.push(groupByTaxonomy);
+			return Array.from(new Set(base));
+		}, [config && config.taxonomies, layout, groupByTaxonomy]);
 
 		const allowedTermIdsByTax = useMemo(() => {
 			const raw = (config && config.termIds) || {};
@@ -264,7 +505,22 @@ import './style.css';
 			return raw && typeof raw === 'object' ? raw : {};
 		}, [config && config.taxonomyTitles]);
 		const [termsByTax, setTermsByTax] = useState({});
-		const [selected, setSelected] = useState({});
+		const baseSelected = useMemo(() => {
+			const ct = config && config.contextTerm ? config.contextTerm : null;
+			if (ct && ct.taxonomy && ct.termId) {
+				return { [ct.taxonomy]: [Number(ct.termId)] };
+			}
+			return {};
+		}, [config && config.contextTerm]);
+		const [selected, setSelected] = useState(() => baseSelected);
+		const filterMode = (config && config.filterMode) || 'ajax';
+
+		function resetAjaxFilters() {
+			setSelected(baseSelected);
+			setSearch('');
+			setPage(1);
+			setSearchOpen(false);
+		}
 
 		function toggleTerm(taxonomy, termId) {
 			setSelected((prev) => {
@@ -284,7 +540,7 @@ import './style.css';
 					dpgTaxTerms(requests: $requests) {
 						taxonomy
 						label
-						terms { id name }
+						terms { id name uri }
 					}
 				}
 			`;
@@ -298,7 +554,7 @@ import './style.css';
 					const next = { _labels: {} };
 					for (const row of list) {
 						if (!row || !row.taxonomy) continue;
-						next[row.taxonomy] = (row.terms || []).map((t) => ({ id: t.id, name: t.name }));
+						next[row.taxonomy] = (row.terms || []).map((t) => ({ id: t.id, name: t.name, uri: t.uri }));
 						if (row.label) next._labels[row.taxonomy] = row.label;
 					}
 					setTermsByTax(next);
@@ -327,9 +583,11 @@ import './style.css';
 		);
 
 		useEffect(() => {
+			if (layout === 'categories') return;
 			let alive = true;
 			setLoading(true);
 			setError('');
+			setSections([]);
 
 			const query = `
 				query DpgPosts($postTypes: [String], $search: String, $filters: [DPGTaxFilterInput], $page: Int, $postsPerPage: Int) {
@@ -369,7 +627,89 @@ import './style.css';
 			return () => {
 				alive = false;
 			};
-		}, [variables]);
+		}, [layout, variables]);
+
+		useEffect(() => {
+			if (layout !== 'categories') return;
+			let alive = true;
+			setLoading(true);
+			setError('');
+			setNodes([]);
+			setPages(0);
+
+			const selectedTermIds = (selected && selected[groupByTaxonomy]) || [];
+			const allowed = (allowedTermIdsByTax && allowedTermIdsByTax[groupByTaxonomy]) || [];
+			const termIds = selectedTermIds.length ? selectedTermIds : allowed;
+
+			const extraFilters = [];
+			for (const [taxonomy, termIds2] of Object.entries(selected || {})) {
+				if (taxonomy === groupByTaxonomy) continue;
+				if (!termIds2 || !termIds2.length) continue;
+				extraFilters.push({ taxonomy, termIds: termIds2 });
+			}
+
+			const query = `
+				query DpgTermSections($taxonomy: String, $termIds: [Int], $postTypes: [String], $search: String, $filters: [DPGTaxFilterInput], $postsPerPage: Int) {
+					dpgTermSections(taxonomy: $taxonomy, termIds: $termIds, postTypes: $postTypes, search: $search, filters: $filters, postsPerPage: $postsPerPage) {
+						term { taxonomy id name uri }
+						posts {
+							total
+							pages
+							nodes {
+								databaseId
+								uri
+								title
+								postType
+								excerpt
+								featuredImageUrl
+								featuredImageAlt
+							}
+						}
+					}
+				}
+			`;
+
+			const vars = {
+				taxonomy: groupByTaxonomy,
+				termIds: termIds && termIds.length ? termIds : null,
+				postTypes: config.postTypes || [],
+				search: debouncedSearch || null,
+				filters: extraFilters.length ? extraFilters : null,
+				postsPerPage: config.postsPerPage || null,
+			};
+
+			graphqlFetch(query, vars)
+				.then((data) => {
+					if (!alive) return;
+					const list = (data && data.dpgTermSections) || [];
+					setSections(list);
+					let sum = 0;
+					for (const row of list) sum += (row && row.posts && Number(row.posts.total)) || 0;
+					setTotal(sum);
+				})
+				.catch((e) => {
+					if (!alive) return;
+					setError(e && e.message ? e.message : 'Request failed');
+					setSections([]);
+					setTotal(0);
+				})
+				.finally(() => {
+					if (!alive) return;
+					setLoading(false);
+				});
+
+			return () => {
+				alive = false;
+			};
+		}, [
+			layout,
+			groupByTaxonomy,
+			config.postTypes,
+			config.postsPerPage,
+			debouncedSearch,
+			selected,
+			allowedTermIdsByTax,
+		]);
 
 		useEffect(() => setPage(1), [debouncedSearch, filters]);
 
@@ -379,40 +719,133 @@ import './style.css';
 			createElement(
 				'div',
 				{ className: 'dpg-toolbar' },
-				createElement('input', {
-					className: 'dpg-search',
-					type: 'search',
-					placeholder: __('Search…', 'dynamic-post-grid-pro'),
-					value: search,
-					onChange: (e) => setSearch(e.target.value),
-				}),
 				createElement(
 					'div',
-					{ className: 'dpg-meta' },
-					loading ? __('Loading…', 'dynamic-post-grid-pro') : `${total} ${__('results', 'dynamic-post-grid-pro')}`
+					{ className: 'dpg-toolbar__left' },
+					createElement(FiltersPanel, {
+						enabledTaxonomies,
+						selected,
+						termsByTax,
+						onToggleTerm: toggleTerm,
+						taxonomyTitles,
+						mode: filterMode,
+						contextTerm: (config && config.contextTerm) || null,
+					}),
+					createElement(ResetButton, {
+						mode: filterMode,
+						href: (config && config.archiveUrl) || '',
+						onClick: resetAjaxFilters,
+					})
+				),
+				createElement(
+					'div',
+					{ className: 'dpg-toolbar__right' },
+					createElement(
+						'button',
+						{
+							type: 'button',
+							className: `dpg-search-toggle ${searchOpen ? 'is-open' : ''}`,
+							'aria-label': __('Search', 'dynamic-post-grid-pro'),
+							onClick: () => setSearchOpen((v) => !v),
+						},
+						createElement(SearchIcon, null)
+					),
+					searchOpen
+						? createElement('input', {
+								ref: searchRef,
+								className: 'dpg-search',
+								type: 'search',
+								placeholder: __('Search…', 'dynamic-post-grid-pro'),
+								value: search,
+								onChange: (e) => setSearch(e.target.value),
+						  })
+						: null,
+					createElement(
+						'div',
+						{ className: 'dpg-meta' },
+						loading ? __('Loading…', 'dynamic-post-grid-pro') : `${total} ${__('results', 'dynamic-post-grid-pro')}`
+					)
 				)
 			),
-			createElement(FiltersPanel, {
-				enabledTaxonomies,
-				selected,
-				termsByTax,
-				onToggleTerm: toggleTerm,
-				taxonomyTitles,
-			}),
 			error ? createElement('div', { className: 'dpg-error' }, error) : null,
-			createElement(
-				'div',
-				{ className: 'dpg-grid' },
-				nodes.map((node) => {
-					const key = node.databaseId || node.uri;
-					if (layout === 'logo') return createElement(GridItemLogo, { key, node });
-					if (layout === 'overlay') return createElement(GridItemOverlay, { key, node });
-					return createElement(GridItem, { key, node });
-				})
-			),
-			paginationType === 'numeric'
-				? createElement(PaginationNumeric, { page, pages, onPage: setPage, __ })
-				: createElement(PaginationButtons, { page, pages, onPage: setPage, __ })
+			!error &&
+			!loading &&
+			(layout === 'categories' ? !sections || !sections.length : !nodes || !nodes.length)
+				? createElement('div', { className: 'dpg-empty' }, __('Aucun résultat trouvé.', 'dynamic-post-grid-pro'))
+				: null,
+			layout === 'blog'
+				? createElement(
+						'div',
+						{ className: 'dpg-blog' },
+						createElement(
+							'div',
+							{ className: 'dpg-blog__top' },
+							createElement(
+								'div',
+								{ className: 'dpg-blog__top-left' },
+								nodes[0]
+									? createElement(GridItemOverlay, {
+											key: nodes[0].databaseId || nodes[0].uri,
+											node: nodes[0],
+									  })
+									: null
+							),
+							createElement(
+								'div',
+								{ className: 'dpg-blog__top-right' },
+								nodes[1]
+									? createElement(GridItemOverlay, {
+											key: nodes[1].databaseId || nodes[1].uri,
+											node: nodes[1],
+									  })
+									: null,
+								nodes[2]
+									? createElement(GridItemOverlay, {
+											key: nodes[2].databaseId || nodes[2].uri,
+											node: nodes[2],
+									  })
+									: null
+							)
+						),
+						createElement(
+							'div',
+							{ className: 'dpg-blog__body' },
+							createElement(
+								'div',
+								{ className: 'dpg-blog__main' },
+								createElement(
+									'div',
+									{ className: 'dpg-blog__list' },
+									nodes.slice(3).map((node) => {
+										const key = node.databaseId || node.uri;
+										return createElement(BlogCard, { key, node });
+									})
+								)
+							),
+							createElement('aside', { className: 'dpg-blog__ad' }, createElement(AdSlot, { config }))
+						)
+				  )
+				: layout === 'categories'
+					? createElement(
+							'div',
+							{ className: 'dpg-cats' },
+							sections.map((section, idx) => createElement(CategorySection, { key: (section && section.term && section.term.id) || idx, section, config }))
+					  )
+				: createElement(
+						'div',
+						{ className: 'dpg-grid' },
+						nodes.map((node) => {
+							const key = node.databaseId || node.uri;
+							if (layout === 'logo') return createElement(GridItemLogo, { key, node });
+							if (layout === 'overlay') return createElement(GridItemOverlay, { key, node });
+							return createElement(GridItem, { key, node });
+						})
+				  ),
+			layout === 'categories'
+				? null
+				: paginationType === 'numeric'
+					? createElement(PaginationNumeric, { page, pages, onPage: setPage, __ })
+					: createElement(PaginationButtons, { page, pages, onPage: setPage, __ })
 		);
 	}
 

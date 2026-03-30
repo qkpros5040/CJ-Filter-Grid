@@ -13,6 +13,10 @@ Helper (optional):
 ## Usage
 - Add the shortcode: `[dpg_grid]`
 - Optional overrides:
+	- Layouts:
+		- `layout="card" | "logo" | "overlay" | "blog" | "categories"`
+		- Categories layout groups posts by a taxonomy term and repeats the blog pattern per term.
+		- Example: `[dpg_grid layout="categories" taxonomies="category" group_by="category" posts_per_page="9"]`
 	- Different grid per post type:
 		- `[dpg_grid post_type="post" taxonomies="category,post_tag" posts_per_page="12"]`
 		- `[dpg_grid post_type="page" taxonomies="" posts_per_page="20"]`

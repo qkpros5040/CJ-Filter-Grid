@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Dynamic Post Grid Pro (DPG)
  * Description: Dynamic grid with search, taxonomy filters, pagination, and optional WPGraphQL integration.
- * Version: 2026.03.27.095009
+ * Version: 2026.03.27.155040
  * Author: CJ
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DPG_VERSION', '2026.03.27.095009' );
+define( 'DPG_VERSION', '2026.03.27.155040' );
 define( 'DPG_FILE', __FILE__ );
 define( 'DPG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DPG_URL', plugin_dir_url( __FILE__ ) );
