@@ -490,7 +490,7 @@ final class DPG_Admin {
 										<option value="logo" <?php selected( 'logo' === $grid_layout ); ?>><?php echo esc_html( 'Logo' ); ?></option>
 										<option value="overlay" <?php selected( 'overlay' === $grid_layout ); ?>><?php echo esc_html( 'Overlay' ); ?></option>
 										<option value="blog" <?php selected( 'blog' === $grid_layout ); ?>><?php echo esc_html( 'Blog' ); ?></option>
-										<option value="categories" <?php selected( 'categories' === $grid_layout ); ?>><?php echo esc_html( 'Categories' ); ?></option>
+										<option value="categories" <?php selected( 'categories' === $grid_layout ); ?>><?php echo esc_html( 'Catégories' ); ?></option>
 									</select>
 									<div style="margin-top:8px;">
 										<div style="display:grid; gap:8px;">

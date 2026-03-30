@@ -58,12 +58,12 @@ import './style.css';
 		if (mode === 'ajax') {
 			return createElement(
 				'button',
-				{ type: 'button', className: 'dpg-reset', onClick, title: __('Reset', 'dynamic-post-grid-pro') },
+				{ type: 'button', className: 'dpg-reset', onClick, title: __('Réinitialiser', 'dynamic-post-grid-pro') },
 				label
 			);
 		}
 		if (!href) return null;
-		return createElement('a', { className: 'dpg-reset', href, title: __('Reset', 'dynamic-post-grid-pro') }, label);
+		return createElement('a', { className: 'dpg-reset', href, title: __('Réinitialiser', 'dynamic-post-grid-pro') }, label);
 	}
 
 	function FiltersPanel({ enabledTaxonomies, selected, termsByTax, onToggleTerm, taxonomyTitles, mode, contextTerm }) {
@@ -128,7 +128,7 @@ import './style.css';
 						createElement('input', {
 							className: 'dpg-dd__search',
 							type: 'search',
-							placeholder: __('Filter…', 'dynamic-post-grid-pro'),
+							placeholder: __('Filtrer…', 'dynamic-post-grid-pro'),
 							value: q,
 							onChange: (e) => setQByTax((prev) => ({ ...prev, [tax]: e.target.value })),
 						}),
@@ -303,50 +303,47 @@ import './style.css';
 		const term = section && section.term ? section.term : null;
 		const posts = section && section.posts ? section.posts : null;
 		const nodes = (posts && posts.nodes) || [];
+		const isSingle = !!(config && config._dpgIsSingleTermView);
+		const showAd = !!(config && config._dpgShowSectionAd);
 		if (!term) return null;
+
+		if (!nodes.length) {
+			return createElement(
+				'section',
+				{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}` },
+				isSingle
+					? null
+					: createElement(
+							'header',
+							{ className: 'dpg-cat__header' },
+							createElement(
+								'h2',
+								{ className: 'dpg-cat__title' },
+								term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
+							)
+					  ),
+				createElement('div', { className: 'dpg-empty dpg-empty--section' }, __('Aucun article trouvé.', 'dynamic-post-grid-pro'))
+			);
+		}
+
+		const hasGlobalAd = !!(config && (config.adImageUrl || config.adHtml));
+		const withAd = showAd && hasGlobalAd;
+		const visibleNodes = withAd ? nodes.slice(0, 3) : nodes.slice(0, 4);
 
 		return createElement(
 			'section',
-			{ className: 'dpg-cat' },
-			createElement(
-				'header',
-				{ className: 'dpg-cat__header' },
-				createElement(
-					'h2',
-					{ className: 'dpg-cat__title' },
-					term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
-				)
-			),
-			createElement(
-				'div',
-				{ className: 'dpg-cat__top' },
-				createElement(
-					'div',
-					{ className: 'dpg-cat__top-left' },
-					nodes[0]
-						? createElement(GridItemOverlay, {
-								key: nodes[0].databaseId || nodes[0].uri,
-								node: nodes[0],
-						  })
-						: null
-				),
-				createElement(
-					'div',
-					{ className: 'dpg-cat__top-right' },
-					nodes[1]
-						? createElement(GridItemOverlay, {
-								key: nodes[1].databaseId || nodes[1].uri,
-								node: nodes[1],
-						  })
-						: null,
-					nodes[2]
-						? createElement(GridItemOverlay, {
-								key: nodes[2].databaseId || nodes[2].uri,
-								node: nodes[2],
-						  })
-						: null
-				)
-			),
+			{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}` },
+			isSingle
+				? null
+				: createElement(
+						'header',
+						{ className: 'dpg-cat__header' },
+						createElement(
+							'h2',
+							{ className: 'dpg-cat__title' },
+							term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
+						)
+				  ),
 			createElement(
 				'div',
 				{ className: 'dpg-cat__body' },
@@ -356,13 +353,60 @@ import './style.css';
 					createElement(
 						'div',
 						{ className: 'dpg-cat__list' },
-						nodes.slice(3).map((node) => {
+						visibleNodes.map((node) => {
 							const key = node.databaseId || node.uri;
 							return createElement(BlogCard, { key, node });
-						})
-					)
+						}),
+						withAd ? createElement('div', { className: 'dpg-cat__adcard' }, createElement(AdSlot, { config })) : null
+					),
+					term.uri
+						? createElement(
+								'div',
+								{ className: 'dpg-cat__below' },
+								createElement(
+									'a',
+									{ className: 'dpg-cat__more', href: term.uri },
+									__('Voir plus', 'dynamic-post-grid-pro')
+								)
+						  )
+						: null
 				),
-				createElement('aside', { className: 'dpg-cat__ad' }, createElement(AdSlot, { config }))
+				null
+			)
+		);
+	}
+
+	function CategoriesTop({ nodes }) {
+		const list = Array.isArray(nodes) ? nodes : [];
+		if (!list.length) return null;
+		return createElement(
+			'div',
+			{ className: 'dpg-cat__top' },
+			createElement(
+				'div',
+				{ className: 'dpg-cat__top-left' },
+				list[0]
+					? createElement(GridItemOverlay, {
+							key: list[0].databaseId || list[0].uri,
+							node: list[0],
+					  })
+					: null
+			),
+			createElement(
+				'div',
+				{ className: 'dpg-cat__top-right' },
+				list[1]
+					? createElement(GridItemOverlay, {
+							key: list[1].databaseId || list[1].uri,
+							node: list[1],
+					  })
+					: null,
+				list[2]
+					? createElement(GridItemOverlay, {
+							key: list[2].databaseId || list[2].uri,
+							node: list[2],
+					  })
+					: null
 			)
 		);
 	}
@@ -467,6 +511,7 @@ import './style.css';
 		const [error, setError] = useState('');
 		const [nodes, setNodes] = useState([]);
 		const [sections, setSections] = useState([]);
+		const [topNodes, setTopNodes] = useState([]);
 		const [total, setTotal] = useState(0);
 		const [pages, setPages] = useState(0);
 
@@ -481,13 +526,22 @@ import './style.css';
 			return Array.isArray(list) && list[0] ? String(list[0]) : 'category';
 		}, [config && config.groupByTaxonomy, config && config.taxonomies]);
 
+		const isSingleTermView = useMemo(() => {
+			const ct = config && config.contextTerm ? config.contextTerm : null;
+			return !!(ct && ct.taxonomy && String(ct.taxonomy) === String(groupByTaxonomy) && ct.termId);
+		}, [config && config.contextTerm, groupByTaxonomy]);
+
+		// On taxonomy archive pages (single term), fall back to a plain card grid:
+		// no top section and no per-category blocks/ad.
+		const effectiveLayout = layout === 'categories' && isSingleTermView ? 'card' : layout;
+
 		const enabledTaxonomies = useMemo(() => {
 			const fromConfig = (config && config.taxonomies) || [];
 			if (!Array.isArray(fromConfig)) return [];
 			const base = fromConfig.filter(Boolean);
-			if (layout === 'categories' && groupByTaxonomy && !base.includes(groupByTaxonomy)) base.push(groupByTaxonomy);
+			if (effectiveLayout === 'categories' && groupByTaxonomy && !base.includes(groupByTaxonomy)) base.push(groupByTaxonomy);
 			return Array.from(new Set(base));
-		}, [config && config.taxonomies, layout, groupByTaxonomy]);
+		}, [config && config.taxonomies, effectiveLayout, groupByTaxonomy]);
 
 		const allowedTermIdsByTax = useMemo(() => {
 			const raw = (config && config.termIds) || {};
@@ -571,6 +625,61 @@ import './style.css';
 			return out;
 		}, [selected]);
 
+		useEffect(() => {
+			if (effectiveLayout !== 'categories') return;
+			if (isSingleTermView) {
+				setTopNodes([]);
+				return;
+			}
+			let alive = true;
+			const query = `
+				query DpgPosts($postTypes: [String], $search: String, $filters: [DPGTaxFilterInput], $page: Int, $postsPerPage: Int) {
+					dpgPosts(postTypes: $postTypes, search: $search, filters: $filters, page: $page, postsPerPage: $postsPerPage) {
+						nodes {
+							databaseId
+							uri
+							title
+							postType
+							excerpt
+							featuredImageUrl
+							featuredImageAlt
+						}
+					}
+				}
+			`;
+
+			// Top area should show latest posts across ALL terms of the grouped taxonomy.
+			const topFilters = [];
+			for (const [taxonomy, termIds] of Object.entries(selected || {})) {
+				if (taxonomy === groupByTaxonomy) continue;
+				if (!termIds || !termIds.length) continue;
+				topFilters.push({ taxonomy, termIds });
+			}
+
+			const vars = {
+				postTypes: config.postTypes || [],
+				search: debouncedSearch || null,
+				filters: topFilters.length ? topFilters : null,
+				page: 1,
+				postsPerPage: 3,
+			};
+
+			graphqlFetch(query, vars)
+				.then((data) => {
+					if (!alive) return;
+					const res = data && data.dpgPosts ? data.dpgPosts : null;
+					setTopNodes((res && res.nodes) || []);
+				})
+				.catch(() => {
+					if (!alive) return;
+					setTopNodes([]);
+				});
+
+			return () => {
+				alive = false;
+			};
+		}, [effectiveLayout, layout, isSingleTermView, config.postTypes, debouncedSearch, selected, groupByTaxonomy]);
+
 		const variables = useMemo(
 			() => ({
 				postTypes: config.postTypes || [],
@@ -583,7 +692,7 @@ import './style.css';
 		);
 
 		useEffect(() => {
-			if (layout === 'categories') return;
+			if (effectiveLayout === 'categories') return;
 			let alive = true;
 			setLoading(true);
 			setError('');
@@ -617,7 +726,7 @@ import './style.css';
 				})
 				.catch((e) => {
 					if (!alive) return;
-					setError(e && e.message ? e.message : 'Request failed');
+					setError(e && e.message ? e.message : 'Échec de la requête');
 				})
 				.finally(() => {
 					if (!alive) return;
@@ -627,10 +736,10 @@ import './style.css';
 			return () => {
 				alive = false;
 			};
-		}, [layout, variables]);
+		}, [effectiveLayout, layout, variables]);
 
 		useEffect(() => {
-			if (layout !== 'categories') return;
+			if (effectiveLayout !== 'categories') return;
 			let alive = true;
 			setLoading(true);
 			setError('');
@@ -675,7 +784,7 @@ import './style.css';
 				postTypes: config.postTypes || [],
 				search: debouncedSearch || null,
 				filters: extraFilters.length ? extraFilters : null,
-				postsPerPage: config.postsPerPage || null,
+				postsPerPage: 4,
 			};
 
 			graphqlFetch(query, vars)
@@ -689,7 +798,7 @@ import './style.css';
 				})
 				.catch((e) => {
 					if (!alive) return;
-					setError(e && e.message ? e.message : 'Request failed');
+					setError(e && e.message ? e.message : 'Échec de la requête');
 					setSections([]);
 					setTotal(0);
 				})
@@ -702,6 +811,7 @@ import './style.css';
 				alive = false;
 			};
 		}, [
+			effectiveLayout,
 			layout,
 			groupByTaxonomy,
 			config.postTypes,
@@ -715,7 +825,7 @@ import './style.css';
 
 		return createElement(
 			'div',
-			{ className: `dpg dpg--layout-${layout}` },
+			{ className: `dpg dpg--layout-${effectiveLayout}` },
 			createElement(
 				'div',
 				{ className: 'dpg-toolbar' },
@@ -745,7 +855,7 @@ import './style.css';
 						{
 							type: 'button',
 							className: `dpg-search-toggle ${searchOpen ? 'is-open' : ''}`,
-							'aria-label': __('Search', 'dynamic-post-grid-pro'),
+							'aria-label': __('Recherche', 'dynamic-post-grid-pro'),
 							onClick: () => setSearchOpen((v) => !v),
 						},
 						createElement(SearchIcon, null)
@@ -755,7 +865,7 @@ import './style.css';
 								ref: searchRef,
 								className: 'dpg-search',
 								type: 'search',
-								placeholder: __('Search…', 'dynamic-post-grid-pro'),
+								placeholder: __('Rechercher…', 'dynamic-post-grid-pro'),
 								value: search,
 								onChange: (e) => setSearch(e.target.value),
 						  })
@@ -763,17 +873,17 @@ import './style.css';
 					createElement(
 						'div',
 						{ className: 'dpg-meta' },
-						loading ? __('Loading…', 'dynamic-post-grid-pro') : `${total} ${__('results', 'dynamic-post-grid-pro')}`
+						loading ? __('Chargement…', 'dynamic-post-grid-pro') : `${total} ${__('résultats', 'dynamic-post-grid-pro')}`
 					)
 				)
 			),
 			error ? createElement('div', { className: 'dpg-error' }, error) : null,
 			!error &&
 			!loading &&
-			(layout === 'categories' ? !sections || !sections.length : !nodes || !nodes.length)
+			(effectiveLayout === 'categories' ? !sections || !sections.length : !nodes || !nodes.length)
 				? createElement('div', { className: 'dpg-empty' }, __('Aucun résultat trouvé.', 'dynamic-post-grid-pro'))
 				: null,
-			layout === 'blog'
+			effectiveLayout === 'blog'
 				? createElement(
 						'div',
 						{ className: 'dpg-blog' },
@@ -825,23 +935,37 @@ import './style.css';
 							createElement('aside', { className: 'dpg-blog__ad' }, createElement(AdSlot, { config }))
 						)
 				  )
-				: layout === 'categories'
+				: effectiveLayout === 'categories'
 					? createElement(
 							'div',
 							{ className: 'dpg-cats' },
-							sections.map((section, idx) => createElement(CategorySection, { key: (section && section.term && section.term.id) || idx, section, config }))
+							isSingleTermView ? null : createElement(CategoriesTop, { nodes: topNodes }),
+							sections.map((section, idx) =>
+								createElement(CategorySection, {
+									key: (section && section.term && section.term.id) || idx,
+									section,
+									config: {
+										...config,
+										_dpgIsSingleTermView: isSingleTermView,
+										_dpgShowSectionAd:
+											!!(config && config.adTermId)
+												? Number(section && section.term && section.term.id) === Number(config.adTermId)
+												: idx === 0,
+									},
+								})
+							)
 					  )
 				: createElement(
 						'div',
 						{ className: 'dpg-grid' },
 						nodes.map((node) => {
 							const key = node.databaseId || node.uri;
-							if (layout === 'logo') return createElement(GridItemLogo, { key, node });
-							if (layout === 'overlay') return createElement(GridItemOverlay, { key, node });
+							if (effectiveLayout === 'logo') return createElement(GridItemLogo, { key, node });
+							if (effectiveLayout === 'overlay') return createElement(GridItemOverlay, { key, node });
 							return createElement(GridItem, { key, node });
 						})
 				  ),
-			layout === 'categories'
+			effectiveLayout === 'categories'
 				? null
 				: paginationType === 'numeric'
 					? createElement(PaginationNumeric, { page, pages, onPage: setPage, __ })

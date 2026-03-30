@@ -16,7 +16,8 @@ Helper (optional):
 	- Layouts:
 		- `layout="card" | "logo" | "overlay" | "blog" | "categories"`
 		- Categories layout groups posts by a taxonomy term and repeats the blog pattern per term.
-		- Example: `[dpg_grid layout="categories" taxonomies="category" group_by="category" posts_per_page="9"]`
+		- Example: `[dpg_grid layout="categories" taxonomies="category" group_by="category" ad_term_id="123" posts_per_page="9"]`
+		- The ad uses the existing grid preset ad image/link settings and is shown only for `ad_term_id` (or the first category if omitted).
 	- Different grid per post type:
 		- `[dpg_grid post_type="post" taxonomies="category,post_tag" posts_per_page="12"]`
 		- `[dpg_grid post_type="page" taxonomies="" posts_per_page="20"]`

@@ -485,18 +485,19 @@ final class DPG_Plugin {
 		$settings = self::get_settings();
 		$grids    = self::get_grids();
 		$raw_atts = is_array( $atts ) ? $atts : array();
-		$atts     = shortcode_atts(
-			array(
-				'grid'           => '',
-				'post_type'      => '',
-				'post_types'     => implode( ',', $settings['post_types'] ),
-				'taxonomies'     => '',
-				'layout'         => '',
-				'group_by'       => '',
-				'pagination'     => '',
-				'filter_mode'    => '',
-				'archive_sync'   => '',
-				'ad_shortcode'   => '',
+			$atts     = shortcode_atts(
+				array(
+					'grid'           => '',
+					'post_type'      => '',
+					'post_types'     => implode( ',', $settings['post_types'] ),
+					'taxonomies'     => '',
+					'layout'         => '',
+					'ad_term_id'     => '',
+					'group_by'       => '',
+					'pagination'     => '',
+					'filter_mode'    => '',
+					'archive_sync'   => '',
+					'ad_shortcode'   => '',
 				'ad_image_id'    => '',
 				'ad_link'        => '',
 				'ad_sticky_offset' => '',
@@ -557,6 +558,14 @@ final class DPG_Plugin {
 			$layout_override = sanitize_key( (string) $atts['layout'] );
 			if ( in_array( $layout_override, array( 'card', 'logo', 'overlay', 'blog', 'categories' ), true ) ) {
 				$layout = $layout_override;
+			}
+		}
+
+		$ad_term_id = 0;
+		if ( array_key_exists( 'ad_term_id', $raw_atts ) ) {
+			$ad_term_id = (int) $atts['ad_term_id'];
+			if ( $ad_term_id < 0 ) {
+				$ad_term_id = 0;
 			}
 		}
 
@@ -656,6 +665,7 @@ final class DPG_Plugin {
 			'adHtml'        => $ad_html,
 			'adImageUrl'    => $ad_image_url,
 			'adLink'        => $ad_link,
+			'adTermId'      => $ad_term_id,
 			'adStickyOffset'=> $ad_sticky_offset,
 		);
 
