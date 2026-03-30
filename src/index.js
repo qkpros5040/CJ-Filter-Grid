@@ -332,7 +332,7 @@ import './style.css';
 
 		return createElement(
 			'section',
-			{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}` },
+			{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}${withAd ? ' dpg-cat--hasad' : ''}` },
 			isSingle
 				? null
 				: createElement(
@@ -531,9 +531,13 @@ import './style.css';
 			return !!(ct && ct.taxonomy && String(ct.taxonomy) === String(groupByTaxonomy) && ct.termId);
 		}, [config && config.contextTerm, groupByTaxonomy]);
 
-		// On taxonomy archive pages (single term), fall back to a plain card grid:
-		// no top section and no per-category blocks/ad.
-		const effectiveLayout = layout === 'categories' && isSingleTermView ? 'card' : layout;
+		const isArchiveTermView = useMemo(() => {
+			const ct = config && config.contextTerm ? config.contextTerm : null;
+			return !!(ct && ct.taxonomy && ct.termId);
+		}, [config && config.contextTerm]);
+
+		// On any taxonomy archive (term) page, show a 4-per-row BlogCard grid (no top section/ad).
+		const effectiveLayout = layout === 'categories' && isArchiveTermView ? 'categories-archive' : layout;
 
 		const enabledTaxonomies = useMemo(() => {
 			const fromConfig = (config && config.taxonomies) || [];
@@ -954,6 +958,15 @@ import './style.css';
 									},
 								})
 							)
+					  )
+				: effectiveLayout === 'categories-archive'
+					? createElement(
+							'div',
+							{ className: 'dpg-archive-grid' },
+							nodes.map((node) => {
+								const key = node.databaseId || node.uri;
+								return createElement(BlogCard, { key, node });
+							})
 					  )
 				: createElement(
 						'div',

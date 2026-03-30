@@ -332,7 +332,7 @@
 
 		return createElement(
 			'section',
-			{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}` },
+			{ className: `dpg-cat${isSingle ? ' dpg-cat--single' : ''}${withAd ? ' dpg-cat--hasad' : ''}` },
 			isSingle
 				? null
 				: createElement(
@@ -533,7 +533,12 @@
 			return !!(ct && ct.taxonomy && String(ct.taxonomy) === String(groupByTaxonomy) && ct.termId);
 		}, [config && config.contextTerm, groupByTaxonomy]);
 
-		const effectiveLayout = layout === 'categories' && isSingleTermView ? 'card' : layout;
+		const isArchiveTermView = useMemo(() => {
+			const ct = config && config.contextTerm ? config.contextTerm : null;
+			return !!(ct && ct.taxonomy && ct.termId);
+		}, [config && config.contextTerm]);
+
+		const effectiveLayout = layout === 'categories' && isArchiveTermView ? 'categories-archive' : layout;
 
 		const enabledTaxonomies = useMemo(() => {
 			const fromConfig = (config && config.taxonomies) || [];
@@ -949,6 +954,15 @@
 									},
 								})
 							)
+					  )
+				: effectiveLayout === 'categories-archive'
+					? createElement(
+							'div',
+							{ className: 'dpg-archive-grid' },
+							nodes.map((node) => {
+								const key = node.databaseId || node.uri;
+								return createElement(BlogCard, { key, node });
+							})
 					  )
 				: createElement(
 						'div',

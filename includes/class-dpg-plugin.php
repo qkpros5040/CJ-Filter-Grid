@@ -576,6 +576,10 @@ final class DPG_Plugin {
 				$group_by = '';
 			}
 		}
+		if ( 'categories' === $layout && $group_by && ! in_array( $group_by, $taxonomies, true ) ) {
+			$taxonomies[] = $group_by;
+			$taxonomies   = array_values( array_unique( array_filter( $taxonomies ) ) );
+		}
 
 		if ( array_key_exists( 'pagination', $raw_atts ) ) {
 			$pagination_override = sanitize_key( (string) $atts['pagination'] );
@@ -612,13 +616,11 @@ final class DPG_Plugin {
 		if ( $archive_sync ) {
 			$qo = function_exists( 'get_queried_object' ) ? get_queried_object() : null;
 			if ( $qo instanceof WP_Term ) {
-				$tax = (string) $qo->taxonomy;
-				if ( $tax && in_array( $tax, $taxonomies, true ) ) {
-					$context_term = array(
-						'taxonomy' => $tax,
-						'termId'   => (int) $qo->term_id,
-					);
-				}
+				$tax          = (string) $qo->taxonomy;
+				$context_term = array(
+					'taxonomy' => $tax,
+					'termId'   => (int) $qo->term_id,
+				);
 			}
 		}
 
