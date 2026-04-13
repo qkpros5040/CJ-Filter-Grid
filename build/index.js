@@ -7,10 +7,6 @@
 	const { createElement, useEffect, useMemo, useRef, useState } = el;
 	const __ = window.wp.i18n && window.wp.i18n.__ ? window.wp.i18n.__ : (s) => s;
 
-	function normalize(text) {
-		return String(text || '').toLowerCase().trim();
-	}
-
 	function useDebounced(value, delayMs) {
 		const [debounced, setDebounced] = useState(value);
 		useEffect(() => {
@@ -50,42 +46,54 @@
 		return createElement(
 			'svg',
 			{ className: 'dpg-searchicon', width: 18, height: 18, viewBox: '0 0 24 24', 'aria-hidden': true },
-			createElement('path', { d: 'M21 21l-4.35-4.35m1.6-5.05a7.45 7.45 0 11-14.9 0 7.45 7.45 0 0114.9 0z', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' })
+			createElement('path', {
+				d: 'M21 21l-4.35-4.35m1.6-5.05a7.45 7.45 0 11-14.9 0 7.45 7.45 0 0114.9 0z',
+				fill: 'none',
+				stroke: 'currentColor',
+				strokeWidth: 2,
+				strokeLinecap: 'round',
+			})
 		);
 	}
 
 	function ResetButton({ href, onClick, mode }) {
-		const label = __('Réinitialiser', 'dynamic-post-grid-pro');
+		const label = __('Réinitialiser les filtres', 'dynamic-post-grid-pro');
 		if (mode === 'ajax') {
 			return createElement(
 				'button',
-				{ type: 'button', className: 'dpg-reset', onClick, title: __('Réinitialiser', 'dynamic-post-grid-pro') },
+				{ type: 'button', className: 'dpg-reset', onClick, title: __('Réinitialiser les filtres', 'dynamic-post-grid-pro') },
 				label
 			);
 		}
 		if (!href) return null;
-		return createElement('a', { className: 'dpg-reset', href, title: __('Réinitialiser', 'dynamic-post-grid-pro') }, label);
+		return createElement('a', { className: 'dpg-reset', href, title: __('Réinitialiser les filtres', 'dynamic-post-grid-pro') }, label);
 	}
 
 	function FiltersPanel({ enabledTaxonomies, selected, termsByTax, onToggleTerm, taxonomyTitles, mode, contextTerm }) {
 		if (!enabledTaxonomies.length) return null;
 		const ref = useRef(null);
 		const [openTax, setOpenTax] = useState(null);
-		const [qByTax, setQByTax] = useState({});
 
 		useEffect(() => {
 			if (!openTax) return;
-			function onDocClick(e) {
+			function onDocPointerDown(e) {
 				if (!ref.current) return;
-				if (!ref.current.contains(e.target)) setOpenTax(null);
+				const target =
+					e.target instanceof Element
+						? e.target
+						: e.target && e.target.parentElement instanceof Element
+							? e.target.parentElement
+							: null;
+				const withinDd = target && target.closest ? target.closest('.dpg-dd') : null;
+				if (!withinDd) setOpenTax(null);
 			}
 			function onKeyDown(e) {
 				if (e.key === 'Escape') setOpenTax(null);
 			}
-			document.addEventListener('click', onDocClick);
+			document.addEventListener('pointerdown', onDocPointerDown, true);
 			document.addEventListener('keydown', onKeyDown);
 			return () => {
-				document.removeEventListener('click', onDocClick);
+				document.removeEventListener('pointerdown', onDocPointerDown, true);
 				document.removeEventListener('keydown', onKeyDown);
 			};
 		}, [openTax]);
@@ -102,9 +110,6 @@
 					tax;
 				const open = openTax === tax;
 				const selectedIds = (selected && selected[tax]) || [];
-				const q = qByTax[tax] || '';
-				const qn = normalize(q);
-				const filtered = q ? terms.filter((t) => normalize(t.name).includes(qn)) : terms;
 				const activeTermId =
 					contextTerm && contextTerm.taxonomy === tax && contextTerm.termId ? Number(contextTerm.termId) : null;
 				return createElement(
@@ -125,18 +130,11 @@
 					createElement(
 						'div',
 						{ className: 'dpg-dd__menu', hidden: !open },
-						createElement('input', {
-							className: 'dpg-dd__search',
-							type: 'search',
-							placeholder: __('Filtrer…', 'dynamic-post-grid-pro'),
-							value: q,
-							onChange: (e) => setQByTax((prev) => ({ ...prev, [tax]: e.target.value })),
-						}),
 						createElement(
 							'div',
 							{ className: 'dpg-dd__items' },
 							mode === 'links'
-								? filtered.map((t) =>
+								? terms.map((t) =>
 										createElement(
 											'a',
 											{
@@ -146,11 +144,12 @@
 												}`,
 												href: t.uri || '#',
 												rel: 'nofollow',
+												onClick: () => setOpenTax(null),
 											},
 											t.name
 										)
 								  )
-								: filtered.map((t) => {
+								: terms.map((t) => {
 										const checked = !!(selected[tax] && selected[tax].includes(t.id));
 										return createElement(
 											'label',
@@ -176,23 +175,28 @@
 		const excerpt = node && node.excerpt ? node.excerpt : '';
 		const imgUrl = node && node.featuredImageUrl ? node.featuredImageUrl : '';
 		const imgAlt = node && node.featuredImageAlt ? node.featuredImageAlt : '';
+		const inner = createElement(
+			'div',
+			{ className: 'dpg-item__inner' },
+			imgUrl
+				? createElement(
+						'div',
+						{ className: 'dpg-item__media' },
+						createElement('img', {
+							className: 'dpg-item__image',
+							src: imgUrl,
+							alt: imgAlt,
+							loading: 'lazy',
+						})
+				  )
+				: null,
+			createElement('h3', { className: 'dpg-item__title' }, title),
+			excerpt ? createElement('p', { className: 'dpg-item__excerpt' }, excerpt) : null
+		);
 		return createElement(
 			'article',
 			{ className: 'dpg-item' },
-			imgUrl
-				? createElement('img', {
-						className: 'dpg-item__image',
-						src: imgUrl,
-						alt: imgAlt,
-						loading: 'lazy',
-				  })
-				: null,
-			createElement(
-				'h3',
-				{ className: 'dpg-item__title' },
-				uri ? createElement('a', { href: uri }, title) : title
-			),
-			excerpt ? createElement('p', { className: 'dpg-item__excerpt' }, excerpt) : null
+			uri ? createElement('a', { className: 'dpg-item__link', href: uri }, inner) : inner
 		);
 	}
 
@@ -202,9 +206,9 @@
 		const imgUrl = node && node.featuredImageUrl ? node.featuredImageUrl : '';
 		const imgAlt = node && node.featuredImageAlt ? node.featuredImageAlt : '';
 
-		return createElement(
-			'article',
-			{ className: 'dpg-item dpg-item--logo' },
+		const inner = createElement(
+			'div',
+			{ className: 'dpg-item__inner' },
 			createElement(
 				'div',
 				{ className: 'dpg-logo' },
@@ -212,13 +216,13 @@
 					? createElement('img', { className: 'dpg-logo__img', src: imgUrl, alt: imgAlt, loading: 'lazy' })
 					: createElement('div', { className: 'dpg-logo__placeholder' })
 			),
-			title
-				? createElement(
-						'div',
-						{ className: 'dpg-logo__title' },
-						uri ? createElement('a', { href: uri }, title) : title
-				  )
-				: null
+			title ? createElement('div', { className: 'dpg-logo__title' }, title) : null
+		);
+
+		return createElement(
+			'article',
+			{ className: 'dpg-item dpg-item--logo' },
+			uri ? createElement('a', { className: 'dpg-item__link', href: uri }, inner) : inner
 		);
 	}
 
@@ -235,10 +239,10 @@
 				{
 					className: 'dpg-overlay',
 					href: uri || '#',
-					style: imgUrl ? { backgroundImage: `url(${imgUrl})` } : undefined,
 				},
+				imgUrl ? createElement('div', { className: 'dpg-overlay__bg', style: { backgroundImage: `url(${imgUrl})` } }) : null,
 				createElement('div', { className: 'dpg-overlay__shade' }),
-				createElement('div', { className: 'dpg-overlay__title' }, title),
+				createElement('h2', { className: 'dpg-overlay__title' }, title),
 				createElement('div', { className: 'dpg-overlay__cta', 'aria-hidden': 'true' }, '→')
 			)
 		);
@@ -251,27 +255,33 @@
 		const imgUrl = node && node.featuredImageUrl ? node.featuredImageUrl : '';
 		const imgAlt = node && node.featuredImageAlt ? node.featuredImageAlt : '';
 
-		return createElement(
-			'article',
-			{ className: 'dpg-bcard' },
+		const inner = createElement(
+			'div',
+			{ className: 'dpg-bcard__inner' },
 			imgUrl
-				? createElement('img', {
-						className: 'dpg-bcard__img',
-						src: imgUrl,
-						alt: imgAlt,
-						loading: 'lazy',
-				  })
+				? createElement(
+						'div',
+						{ className: 'dpg-bcard__media' },
+						createElement('img', {
+							className: 'dpg-bcard__img',
+							src: imgUrl,
+							alt: imgAlt,
+							loading: 'lazy',
+						})
+				  )
 				: null,
 			createElement(
 				'div',
 				{ className: 'dpg-bcard__body' },
-				createElement(
-					'h3',
-					{ className: 'dpg-bcard__title' },
-					uri ? createElement('a', { href: uri }, title) : title
-				),
+				createElement('h3', { className: 'dpg-bcard__title' }, title),
 				excerpt ? createElement('p', { className: 'dpg-bcard__excerpt' }, excerpt) : null
 			)
+		);
+
+		return createElement(
+			'article',
+			{ className: 'dpg-bcard' },
+			uri ? createElement('a', { className: 'dpg-bcard__link', href: uri }, inner) : inner
 		);
 	}
 
@@ -320,7 +330,19 @@
 								'h2',
 								{ className: 'dpg-cat__title' },
 								term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
-							)
+							),
+							term.uri
+								? createElement(
+										'a',
+										{ className: 'dpg-cat__more', href: term.uri },
+										__('Voir plus', 'dynamic-post-grid-pro'),
+										createElement('img', {
+											src: 'https://cj.williamfiliatrault.com/wp-content/themes/communcation-jeunesse/resources/images/arrow-right.svg',
+											className: 'dpg-cat__more-icon',
+											alt: '',
+										})
+								  )
+								: null
 					  ),
 				createElement('div', { className: 'dpg-empty dpg-empty--section' }, __('Aucun article trouvé.', 'dynamic-post-grid-pro'))
 			);
@@ -342,7 +364,19 @@
 							'h2',
 							{ className: 'dpg-cat__title' },
 							term.uri ? createElement('a', { href: term.uri }, term.name) : term.name
-						)
+						),
+						term.uri
+							? createElement(
+									'a',
+									{ className: 'dpg-cat__more', href: term.uri },
+									__('Voir plus', 'dynamic-post-grid-pro'),
+									createElement('img', {
+										src: 'https://cj.williamfiliatrault.com/wp-content/themes/communcation-jeunesse/resources/images/arrow-right.svg',
+										className: 'dpg-cat__more-icon',
+										alt: '',
+									})
+							  )
+							: null
 				  ),
 			createElement(
 				'div',
@@ -358,18 +392,7 @@
 							return createElement(BlogCard, { key, node });
 						}),
 						withAd ? createElement('div', { className: 'dpg-cat__adcard' }, createElement(AdSlot, { config })) : null
-					),
-					term.uri
-						? createElement(
-								'div',
-								{ className: 'dpg-cat__below' },
-								createElement(
-									'a',
-									{ className: 'dpg-cat__more', href: term.uri },
-									__('Voir plus', 'dynamic-post-grid-pro')
-								)
-						  )
-						: null
+					)
 				),
 				null
 			)
@@ -498,10 +521,41 @@
 	}
 
 	function GridContainer({ config }) {
+		const didScrollInit = useRef(false);
 		const [search, setSearch] = useState('');
-		const [searchOpen, setSearchOpen] = useState(false);
+		const [isDesktop, setIsDesktop] = useState(() => {
+			try {
+				return !!(window.matchMedia && window.matchMedia('(min-width: 721px)').matches);
+			} catch (e) {
+				return false;
+			}
+		});
+		const [searchOpen, setSearchOpen] = useState(() => {
+			try {
+				return !!(window.matchMedia && window.matchMedia('(min-width: 721px)').matches);
+			} catch (e) {
+				return false;
+			}
+		});
 		const debouncedSearch = useDebounced(search, 350);
 		const searchRef = useRef(null);
+
+		useEffect(() => {
+			if (!window.matchMedia) return;
+			const mql = window.matchMedia('(min-width: 721px)');
+			const onChange = (e) => setIsDesktop(!!(e && e.matches));
+			setIsDesktop(!!mql.matches);
+			if (mql.addEventListener) mql.addEventListener('change', onChange);
+			else if (mql.addListener) mql.addListener(onChange);
+			return () => {
+				if (mql.removeEventListener) mql.removeEventListener('change', onChange);
+				else if (mql.removeListener) mql.removeListener(onChange);
+			};
+		}, []);
+
+		useEffect(() => {
+			setSearchOpen(!!isDesktop);
+		}, [isDesktop]);
 
 		useEffect(() => {
 			if (searchOpen && searchRef.current) {
@@ -578,7 +632,7 @@
 			setSelected(baseSelected);
 			setSearch('');
 			setPage(1);
-			setSearchOpen(false);
+			setSearchOpen(!!isDesktop);
 		}
 
 		function toggleTerm(taxonomy, termId) {
@@ -823,6 +877,18 @@
 			setPage(1);
 		}, [debouncedSearch, filters]);
 
+		useEffect(() => {
+			if (!didScrollInit.current) {
+				didScrollInit.current = true;
+				return;
+			}
+			try {
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			} catch (e) {
+				window.scrollTo(0, 0);
+			}
+		}, [page]);
+
 		return createElement(
 			'div',
 			{ className: `dpg dpg--layout-${effectiveLayout}` },
@@ -831,32 +897,53 @@
 				{ className: 'dpg-toolbar' },
 				createElement(
 					'div',
-					{ className: 'dpg-toolbar__left' },
-					createElement(FiltersPanel, {
-						enabledTaxonomies,
-						selected,
-						termsByTax,
-						onToggleTerm: toggleTerm,
-						taxonomyTitles,
-						mode: filterMode,
-						contextTerm: (config && config.contextTerm) || null,
-					}),
-					createElement(ResetButton, {
-						mode: filterMode,
-						href: (config && config.archiveUrl) || '',
-						onClick: resetAjaxFilters,
-					})
+					{ className: 'dpg-toolbar__top' },
+					createElement(
+						'div',
+						{ className: 'dpg-toolbar__menu' },
+						createElement(
+							'div',
+							{ className: 'dpg-filters-desktop' },
+							createElement(FiltersPanel, {
+								enabledTaxonomies,
+								selected,
+								termsByTax,
+								onToggleTerm: toggleTerm,
+								taxonomyTitles,
+								mode: filterMode,
+								contextTerm: (config && config.contextTerm) || null,
+							})
+						),
+						createElement(
+							'details',
+							{ className: 'dpg-filters-mobile' },
+							createElement('summary', { className: 'dpg-filters-mobile__summary' }, __('Filtres', 'dynamic-post-grid-pro')),
+							createElement(
+								'div',
+								{ className: 'dpg-filters-mobile__body' },
+								createElement(FiltersPanel, {
+									enabledTaxonomies,
+									selected,
+									termsByTax,
+									onToggleTerm: toggleTerm,
+									taxonomyTitles,
+									mode: filterMode,
+									contextTerm: (config && config.contextTerm) || null,
+								})
+							)
+						)
+					),
 				),
 				createElement(
 					'div',
-					{ className: 'dpg-toolbar__right' },
+					{ className: 'dpg-toolbar__bottom' },
 					createElement(
 						'button',
 						{
 							type: 'button',
 							className: `dpg-search-toggle ${searchOpen ? 'is-open' : ''}`,
 							'aria-label': __('Recherche', 'dynamic-post-grid-pro'),
-							onClick: () => setSearchOpen((v) => !v),
+							onClick: () => (isDesktop ? null : setSearchOpen((v) => !v)),
 						},
 						createElement(SearchIcon, null)
 					),
@@ -870,11 +957,11 @@
 								onChange: (e) => setSearch(e.target.value),
 						  })
 						: null,
-					createElement(
-						'div',
-						{ className: 'dpg-meta' },
-						loading ? __('Chargement…', 'dynamic-post-grid-pro') : `${total} ${__('résultats', 'dynamic-post-grid-pro')}`
-					)
+					createElement(ResetButton, {
+						mode: filterMode,
+						href: (config && config.archiveUrl) || '',
+						onClick: resetAjaxFilters,
+					})
 				)
 			),
 			error ? createElement('div', { className: 'dpg-error' }, error) : null,
